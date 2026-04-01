@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+build/
+
+# Test build artifacts (users build these locally)
+tests/fixtures/*.exe
+tests/fixtures/*.pdb
+tests/fixtures/*.obj
+tests/fixtures/*.ilk
+tests/fixtures/build/
