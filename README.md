@@ -22,6 +22,44 @@ attach to process → set breakpoint → inspect callstack → read locals → f
 
 Each operation takes **milliseconds**. The agent navigates the program's live state exactly like you would in Visual Studio, but driven by AI that can cross-reference the source code with what it sees in memory.
 
+## Example: Agent Finds an Off-By-One Bug
+
+Consider this C code with a subtle bug — `get_last_player` returns `&players[count]` instead of `&players[count-1]`:
+
+```c
+typedef struct {
+    Player* players;
+    int count;
+    int capacity;
+} GameState;
+
+// BUG: off-by-one — accesses players[count] instead of players[count-1]
+Player* get_last_player(GameState* game) {
+    return &game->players[game->count];  // should be count - 1
+}
+
+void apply_poison(GameState* game) {
+    Player* last = get_last_player(game);  // reads garbage when count == 0
+    damage_player(last, 5);
+}
+```
+
+The agent launches the program, sets breakpoints, and investigates:
+
+| # | Agent Action | MCP Tool | What the Agent Sees | Conclusion |
+|---|-------------|----------|-------------------|------------|
+| 1 | Launch with symbols | `launch` | Process started in 0.25s | Ready to debug |
+| 2 | Load only our PDB | `load_symbols_for` | `crashme!main`, `crashme!get_last_player` found | Symbols loaded in 0.01s |
+| 3 | Break on suspect function | `set_breakpoint` | `bp crashme!get_last_player` — resolved | Breakpoint set |
+| 4 | Run the program | `go` | Breakpoint hit instantly | Called from `main+0x8b` |
+| 5 | Who called this? | `callstack` | `get_last_player` ← `main` ← `__scrt_common_main_seh` | Normal call from main |
+| 6 | What's the game state? | `display_type` | `count: 3, capacity: 4, players: 0x1d7...` | 3 players exist, looks OK |
+| 7 | What does it return? | `step_out` + `locals` | `last = 0x00000000'00000000` (NULL!) | Returned bad pointer! |
+| 8 | Continue to second call | `go` | Hit BP in `apply_poison` | Second call site |
+| 9 | Step into, inspect | `step_into` + `evaluate` | `game->count = 0` | **BUG**: `&players[0]` on empty game = uninitialized memory |
+
+**Root cause found in ~1 second of debug time.** No print statements. No recompilation. The agent read the source, set targeted breakpoints, and followed the data to the bug — the same way you would in Visual Studio, but without the manual clicking.
+
 ## Quick Start
 
 ### Prerequisites
@@ -32,8 +70,8 @@ Each operation takes **milliseconds**. The agent navigates the program's live st
 ### Install
 
 ```bash
-git clone https://github.com/user/windbg-mcp.git
-cd windbg-mcp
+git clone https://github.com/RandyGaul/mcp-win-debugger.git
+cd mcp-win-debugger
 uv sync
 ```
 
@@ -46,7 +84,7 @@ Add to your project's `.claude/settings.json`:
   "mcpServers": {
     "windbg": {
       "command": "uv",
-      "args": ["run", "--project", "/path/to/windbg-mcp", "windbg-mcp"]
+      "args": ["run", "--project", "/path/to/mcp-win-debugger", "windbg-mcp"]
     }
   }
 }
@@ -169,60 +207,6 @@ The server is optimized for speed:
 | Step over | <1ms |
 | Read memory | <1ms |
 | Evaluate expression | <1ms |
-
-## Example: Finding an Off-By-One Bug
-
-Here's a real debugging session using the MCP to find a bug in `crashme.exe`
-(source in `tests/fixtures/crashme.c`). The program has a `get_last_player`
-function that returns `&players[count]` instead of `&players[count-1]`.
-
-### Agent Session Log
-
-```
-=== 1. LAUNCH crashme.exe ===
-  Time: 0.25s
-
-=== 2. LOAD SYMBOLS ===
-  Time: 0.01s
-  main: 00007ff6`b8117370 crashme!main (int, char **)
-  get_last_player: 00007ff6`b8117280 crashme!get_last_player (struct GameState *)
-
-=== 3. SET BREAKPOINTS ===
-  0 e 00007ff6`b8117280  crashme!get_last_player
-  1 e 00007ff6`b8117330  crashme!apply_poison
-
-=== 4. GO - run to first breakpoint ===
-  Hit BP in 0.00s
-  Breakpoint 0 hit
-  crashme!get_last_player:
-
-=== 5. CALLSTACK ===
-  crashme!get_last_player
-  crashme!main+0x8b
-  crashme!__scrt_common_main_seh+0x10c
-  KERNEL32!BaseThreadInitThunk+0x17
-
-=== 6. LOCAL VARIABLES ===
-  struct GameState * game = 0x000001d7`e4ba0880
-
-=== 7. INSPECT GameState struct ===
-  +0x000 players  : 0x000001d7`... Player
-  +0x008 count    : 3
-  +0x00c capacity : 4
-
-=== 8. STEP OUT - see return value ===
-  struct Player * last = 0x00000000`00000000  <-- BUG: returned NULL!
-
-=== 9. CONTINUE to apply_poison ===
-  Breakpoint 1 hit — crashme!apply_poison
-
-=== 10. STEP INTO get_last_player ===
-  game->count = 0
-  BUG: returns &players[count] instead of &players[count-1]!
-  When count=0, reads uninitialized memory!
-```
-
-The agent identified the off-by-one bug in seconds, without modifying source code or recompiling.
 
 ## Building Test Fixtures
 
