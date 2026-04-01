@@ -1,4 +1,4 @@
-# windbg-mcp
+# mcp-win-debugger
 
 An MCP server that gives AI agents native Windows debugging superpowers via CDB (Console Debugger).
 
