@@ -65,30 +65,32 @@ The agent launches the program, sets breakpoints, and investigates:
 ### Prerequisites
 
 - **Windows** with [Windows SDK Debugging Tools](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/) installed (provides `cdb.exe`)
-- **Python 3.12+** and [uv](https://docs.astral.sh/uv/)
+- **Python 3.12+**
+
+No third-party dependencies — the server uses only the Python standard library.
 
 ### Install
 
 ```bash
 git clone https://github.com/RandyGaul/mcp-win-debugger.git
-cd mcp-win-debugger
-uv sync
 ```
 
 ### Configure Claude Code
 
-Add to your project's `.claude/settings.json`:
+Add to your project's `.mcp.json` (create it in your project root if it doesn't exist):
 
 ```json
 {
   "mcpServers": {
     "windbg": {
-      "command": "uv",
-      "args": ["run", "--project", "/path/to/mcp-win-debugger", "windbg-mcp"]
+      "command": "python",
+      "args": ["C:/path/to/mcp-win-debugger/src/server.py"]
     }
   }
 }
 ```
+
+Replace `C:/path/to/mcp-win-debugger` with the actual path where you cloned the repo.
 
 ### Usage
 
@@ -219,7 +221,7 @@ cmake --build build
 ## Running Tests
 
 ```bash
-uv run pytest tests/ -v
+pytest tests/ -v
 ```
 
 Tests share a single CDB session per module for speed (~2.5 min total).
