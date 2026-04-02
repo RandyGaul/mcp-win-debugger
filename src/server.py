@@ -148,7 +148,11 @@ async def go(breakpoint_id: int = -1) -> str:
 
 @mcp.tool()
 async def step_into() -> str:
-    """Step into the next instruction (F11). Follows calls into functions."""
+    """Step into the next source line (F11). Follows calls into functions.
+
+    Steps by source line when symbols with line info are loaded (skips
+    prologue instructions automatically). Falls back to instruction-level
+    stepping when no source info is available."""
     cdb = _require_session()
     result = await cdb.execute("t")
     return result.output
@@ -156,7 +160,11 @@ async def step_into() -> str:
 
 @mcp.tool()
 async def step_over() -> str:
-    """Step over the next instruction (F10). Executes calls without entering them."""
+    """Step over the next source line (F10). Executes calls without entering them.
+
+    Steps by source line when symbols with line info are loaded (skips
+    prologue instructions automatically). Falls back to instruction-level
+    stepping when no source info is available."""
     cdb = _require_session()
     result = await cdb.execute("p")
     return result.output
@@ -427,6 +435,10 @@ async def load_symbols_for(module: str, pdb_path: str = "") -> str:
     """
     cdb = _require_session()
     parts = []
+
+    # Enable source line info loading and source-level stepping
+    await cdb.execute(".symopt+0x10")
+    await cdb.execute("l+t")
 
     if pdb_path:
         add_result = await cdb.execute(f".sympath+ {pdb_path}")

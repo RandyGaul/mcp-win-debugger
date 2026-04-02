@@ -136,6 +136,7 @@ class CdbProcess:
             self._collect_until_marker(LAUNCH_MARKER),
             timeout=self.timeout,
         )
+
         return CdbResult(command="<launch>", output=output.strip())
 
     async def open_dump(self, dump_path: str, symbol_path: str | None = None) -> CdbResult:
