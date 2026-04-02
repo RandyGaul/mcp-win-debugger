@@ -194,6 +194,11 @@ async def break_execution() -> str:
 async def set_breakpoint(expression: str, condition: str = "") -> str:
     """Set a breakpoint at a function, address, or source location.
 
+    When a function breakpoint hits, you land at the very start of the function.
+    Use step_over once to advance past the prologue to the first source line where
+    locals are initialized. To read arguments before the prologue, use evaluate
+    with register names (@rcx, @rdx, @r8, @r9 for the first four args on x64).
+
     Args:
         expression: Breakpoint location — function name (e.g. 'main'), address (0x...), or source (file.cpp:42)
         condition: Optional condition expression (breakpoint only triggers when true)
@@ -298,6 +303,10 @@ async def locals() -> str:
 @mcp.tool()
 async def evaluate(expression: str) -> str:
     """Evaluate a C++ expression and print the result.
+
+    Tip: If you need to evaluate multiple expressions while stopped at a breakpoint,
+    disable the breakpoint first to avoid re-fire collisions that produce stale output.
+    Alternatively, use cdb_command with semicolons to batch evaluations in one call.
 
     Args:
         expression: C++ expression to evaluate (e.g. 'myVar', 'ptr->field', 'sizeof(MyStruct)')
