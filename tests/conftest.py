@@ -2,9 +2,13 @@
 
 import os
 import pathlib
+import sys
 import pytest
 
-from windbg_mcp.cdb import CdbProcess, find_cdb
+# Add src/ to import path so tests can import directly
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+from cdb import CdbProcess, find_cdb
 
 FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures"
 
@@ -40,7 +44,6 @@ def find_crashme_pdb() -> str | None:
     exe_dir = pathlib.Path(exe).parent
     if (exe_dir / "crashme.pdb").is_file():
         return str(exe_dir)
-    # Also check fixtures root (MSVC puts PDB there sometimes)
     if (FIXTURES_DIR / "crashme.pdb").is_file():
         return str(FIXTURES_DIR)
     return None
@@ -59,10 +62,7 @@ requires_crashme = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 async def cdb_crashme():
-    """Launch crashme.exe under cdb ONCE per test module. Reused across tests.
-
-    Sets symbol path to the directory containing crashme.pdb and force-loads symbols.
-    """
+    """Launch crashme.exe under cdb ONCE per test module. Reused across tests."""
     exe = find_crashme()
     pdb_dir = find_crashme_pdb()
     assert exe, "crashme.exe not found"

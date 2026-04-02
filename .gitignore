@@ -4,6 +4,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 build/
+uv.lock
 
 # Test build artifacts (users build these locally)
 tests/fixtures/*.exe

@@ -1,5 +1,8 @@
 """
 WinDbg MCP Server — exposes cdb.exe debugging as MCP tools.
+
+No external dependencies. Run directly:
+    python src/server.py
 """
 
 import asyncio
@@ -7,14 +10,17 @@ import logging
 import pathlib
 import sys
 
-from mcp.server.fastmcp import FastMCP
-
-from .cdb import CdbProcess
+try:
+    from .mcp_server import McpServer
+    from .cdb import CdbProcess
+except ImportError:
+    from mcp_server import McpServer
+    from cdb import CdbProcess
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("windbg")
+mcp = McpServer("windbg")
 
 # ── Load prompt templates ───────────────────────────────────────────
 
@@ -45,6 +51,7 @@ def memory_corruption() -> str:
     """Investigation workflow for memory corruption bugs using data breakpoints.
     Covers: identifying corrupted data, setting hardware watchpoints, catching the corruptor."""
     return _load_prompt("memory-corruption")
+
 
 # Single shared cdb session (one debug target at a time)
 _cdb: CdbProcess | None = None
@@ -422,15 +429,12 @@ async def load_symbols_for(module: str, pdb_path: str = "") -> str:
     parts = []
 
     if pdb_path:
-        # Temporarily add the PDB path to the symbol path
         add_result = await cdb.execute(f".sympath+ {pdb_path}")
         parts.append(add_result.output)
 
-    # Force-load symbols for just this module
     load_result = await cdb.execute(f".reload /f {module}", timeout=60.0)
     parts.append(load_result.output)
 
-    # Verify symbols loaded
     check_result = await cdb.execute(f"lm vm {module}")
     parts.append(check_result.output)
 
@@ -502,9 +506,7 @@ async def dereference_pointer(address: str) -> str:
         address: Address containing the pointer to dereference
     """
     cdb = _require_session()
-    # Read the pointer value
     ptr_result = await cdb.execute(f"dps {address} L1")
-    # Also show raw memory at the target
     return ptr_result.output
 
 
@@ -522,7 +524,6 @@ async def inspect_object(address: str, type_name: str = "") -> str:
     cdb = _require_session()
     parts = []
 
-    # Show pointer-sized values with symbol resolution (reveals vtable)
     dps = await cdb.execute(f"dps {address} L8")
     parts.append(f"=== Memory (with symbols) ===\n{dps.output}")
 
@@ -567,10 +568,7 @@ async def set_variable(name: str, value: str) -> str:
         value: New value as a C++ expression
     """
     cdb = _require_session()
-    # Use the r? (typed register/pseudo-register) or ed for direct memory edit
-    # For most variables, ?? assignment or ed works
     result = await cdb.execute(f"ed {name} {value}")
-    # Verify the change
     verify = await cdb.execute(f"?? {name}")
     return f"{result.output}\nNew value: {verify.output}"
 
@@ -585,7 +583,6 @@ async def set_register(register: str, value: str) -> str:
     """
     cdb = _require_session()
     result = await cdb.execute(f"r {register}={value}")
-    # Show updated register state
     verify = await cdb.execute(f"r {register}")
     return f"{result.output}\n{verify.output}"
 
